@@ -366,7 +366,8 @@ class MacroApp:
         self.root = root
         self.steps: list[MacroStep] = []
 
-        self.editor = tk.Frame(root, width=250, bd=1, relief=tk.SUNKEN)
+        self.editor_width = 250
+        self.editor = tk.Frame(root, width=self.editor_width, bd=1, relief=tk.SUNKEN)
         self.editor.pack(side=tk.RIGHT, fill=tk.Y, padx=5, pady=5)
         self.editor.pack_propagate(False)
 
@@ -394,11 +395,11 @@ class MacroApp:
 
     def open_editor(self, step: MacroStep, index: int | None):
         if self.editing_step is not None:
-            return
-        self.editing_step = step
-        self.editing_index = index
+            self.close_editor()
         for w in self.editor.winfo_children():
             w.destroy()
+        self.editing_step = step
+        self.editing_index = index
         form = tk.Frame(self.editor)
         form.pack(fill=tk.BOTH, expand=True)
         step.build_editor(form)
@@ -406,6 +407,11 @@ class MacroApp:
         btns.pack(fill=tk.X, pady=5)
         tk.Button(btns, text="확인", command=self.confirm_edit).pack(side=tk.LEFT, padx=5)
         tk.Button(btns, text="취소", command=self.cancel_edit).pack(side=tk.LEFT, padx=5)
+        self.editor.update_idletasks()
+        req_width = self.editor.winfo_reqwidth()
+        if req_width > self.editor_width:
+            self.editor_width = req_width
+        self.editor.config(width=self.editor_width)
 
     def confirm_edit(self):
         if not self.editing_step or not self.editing_step.apply_editor():
@@ -452,16 +458,11 @@ class MacroApp:
         idx = self.listbox.curselection()
         if not idx:
             return
-        if event is not None and self.editing_step is not None:
-            return
+        if self.editing_step is not None:
+            self.close_editor()
         i = idx[0]
-        if self.editing_step is not None and i == self.editing_index:
-            messagebox.showinfo("정보", "편집중인 블록은 삭제할 수 없습니다.")
-            return
         del self.steps[i]
         self.listbox.delete(i)
-        if self.editing_step is not None and self.editing_index is not None and i < self.editing_index:
-            self.editing_index -= 1
 
     def edit_selected(self, event=None):
         idx = self.listbox.curselection()
