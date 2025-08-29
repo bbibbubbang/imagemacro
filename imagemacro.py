@@ -1,10 +1,18 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
+import os
+import tempfile
+
 try:
     import pyautogui
 except Exception:
     pyautogui = None
+
+try:
+    from PIL import Image, ImageTk
+except Exception:
+    Image = ImageTk = None
 
 
 class MacroStep:
@@ -17,7 +25,10 @@ class MacroStep:
         return self.name
 
     def edit(self, parent: tk.Tk):
-        """Override in subclasses to configure the step."""
+        """Override in subclasses to configure the step.
+
+        Should return True if the user confirmed the dialog, False otherwise.
+        """
         raise NotImplementedError
 
 
@@ -46,7 +57,6 @@ class ImageStep(MacroStep):
     def edit(self, parent: tk.Tk):
         top = tk.Toplevel(parent)
         top.title("이미지 단계")
-        top.geometry("400x200")
 
         tk.Label(top, text="이미지 경로:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
         path_entry = tk.Entry(top, width=30)
@@ -60,6 +70,85 @@ class ImageStep(MacroStep):
                 path_entry.insert(0, file)
 
         tk.Button(top, text="찾아보기", command=browse).grid(row=0, column=2, padx=5, pady=5)
+
+        def show_preview(path: str):
+            if not os.path.exists(path):
+                return
+            prev = tk.Toplevel(parent)
+            prev.title("미리보기")
+            img = tk.PhotoImage(file=path)
+            lbl = tk.Label(prev, image=img)
+            lbl.image = img
+            lbl.pack()
+
+        def capture():
+            if pyautogui is None:
+                messagebox.showerror("오류", "pyautogui가 필요합니다")
+                return
+            top.withdraw()
+            parent.iconify()
+            parent.update()
+
+            overlay = tk.Toplevel()
+            overlay.attributes("-fullscreen", True)
+            overlay.attributes("-topmost", True)
+            canvas = tk.Canvas(overlay, cursor="cross")
+            canvas.pack(fill=tk.BOTH, expand=True)
+
+            bg = None
+            if Image and ImageTk:
+                shot = pyautogui.screenshot()
+                bg = ImageTk.PhotoImage(shot)
+                canvas.create_image(0, 0, image=bg, anchor="nw")
+
+            start = {"x": 0, "y": 0}
+            rect = {"id": None}
+
+            def on_right_press(event):
+                start["x"], start["y"] = event.x, event.y
+                rect["id"] = canvas.create_rectangle(
+                    event.x, event.y, event.x, event.y, outline="red"
+                )
+
+            def on_right_drag(event):
+                if rect["id"]:
+                    canvas.coords(rect["id"], start["x"], start["y"], event.x, event.y)
+
+            def on_right_release(event):
+                overlay.destroy()
+                x1 = overlay.winfo_rootx() + start["x"]
+                y1 = overlay.winfo_rooty() + start["y"]
+                x2 = overlay.winfo_rootx() + event.x
+                y2 = overlay.winfo_rooty() + event.y
+                region = (
+                    min(x1, x2),
+                    min(y1, y2),
+                    abs(x2 - x1),
+                    abs(y2 - y1),
+                )
+                img = pyautogui.screenshot(region=region)
+                fd, tmp = tempfile.mkstemp(suffix=".png")
+                os.close(fd)
+                img.save(tmp)
+                path_entry.delete(0, tk.END)
+                path_entry.insert(0, tmp)
+                show_preview(tmp)
+                parent.deiconify()
+                top.deiconify()
+
+            def on_left_click(event):
+                overlay.destroy()
+                parent.deiconify()
+                top.deiconify()
+
+            overlay.bind("<ButtonPress-3>", on_right_press)
+            overlay.bind("<B3-Motion>", on_right_drag)
+            overlay.bind("<ButtonRelease-3>", on_right_release)
+            overlay.bind("<ButtonPress-1>", on_left_click)
+            overlay.grab_set()
+            parent.wait_window(overlay)
+
+        tk.Button(top, text="캡쳐", command=capture).grid(row=0, column=3, padx=5, pady=5)
 
         tk.Label(top, text="모드:").grid(row=1, column=0, sticky="w", padx=5, pady=5)
         modes = [
@@ -87,6 +176,8 @@ class ImageStep(MacroStep):
                 row=3, column=1 + i, sticky="w", padx=5, pady=5
             )
 
+        result = {"ok": False}
+
         def ok():
             self.path = path_entry.get()
             try:
@@ -94,12 +185,17 @@ class ImageStep(MacroStep):
             except ValueError:
                 messagebox.showerror("오류", "시도 횟수는 정수여야 합니다")
                 return
+            result["ok"] = True
+            top.destroy()
+
+        def cancel():
             top.destroy()
 
         tk.Button(top, text="확인", command=ok).grid(row=4, column=1, padx=5, pady=5)
-        tk.Button(top, text="취소", command=top.destroy).grid(row=4, column=2, padx=5, pady=5)
+        tk.Button(top, text="취소", command=cancel).grid(row=4, column=2, padx=5, pady=5)
         top.grab_set()
         parent.wait_window(top)
+        return result["ok"]
 
 
 class MouseStep(MacroStep):
@@ -125,7 +221,6 @@ class MouseStep(MacroStep):
     def edit(self, parent: tk.Tk):
         top = tk.Toplevel(parent)
         top.title("마우스 단계")
-        top.geometry("400x200")
 
         tk.Label(top, text="X:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
         x_entry = tk.Entry(top, width=6)
@@ -170,6 +265,7 @@ class MouseStep(MacroStep):
         interval_entry = tk.Entry(top, width=6)
         interval_entry.insert(0, str(self.interval.get()))
         interval_entry.grid(row=2, column=2, padx=5, pady=5)
+        result = {"ok": False}
 
         def ok():
             try:
@@ -182,12 +278,18 @@ class MouseStep(MacroStep):
             self.button.set(buttons[button_combo.get()])
             self.action.set(actions[action_combo.get()])
             top.unbind("<F10>")
+            result["ok"] = True
+            top.destroy()
+
+        def cancel():
+            top.unbind("<F10>")
             top.destroy()
 
         tk.Button(top, text="확인", command=ok).grid(row=3, column=1, padx=5, pady=5)
-        tk.Button(top, text="취소", command=top.destroy).grid(row=3, column=2, padx=5, pady=5)
+        tk.Button(top, text="취소", command=cancel).grid(row=3, column=2, padx=5, pady=5)
         top.grab_set()
         parent.wait_window(top)
+        return result["ok"]
 
 
 class KeyboardStep(MacroStep):
@@ -207,7 +309,6 @@ class KeyboardStep(MacroStep):
     def edit(self, parent: tk.Tk):
         top = tk.Toplevel(parent)
         top.title("키보드 단계")
-        top.geometry("400x200")
 
         tk.Label(top, text="키:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
         key_entry = tk.Entry(top, width=10)
@@ -240,15 +341,21 @@ class KeyboardStep(MacroStep):
             tk.Radiobutton(top, text=label, variable=self.action, value=value).grid(
                 row=1, column=1 + i, sticky="w", padx=5, pady=5
             )
+        result = {"ok": False}
 
         def ok():
             self.key.set(key_entry.get())
+            result["ok"] = True
+            top.destroy()
+
+        def cancel():
             top.destroy()
 
         tk.Button(top, text="확인", command=ok).grid(row=2, column=1, padx=5, pady=5)
-        tk.Button(top, text="취소", command=top.destroy).grid(row=2, column=2, padx=5, pady=5)
+        tk.Button(top, text="취소", command=cancel).grid(row=2, column=2, padx=5, pady=5)
         top.grab_set()
         parent.wait_window(top)
+        return result["ok"]
 
 
 class DelayStep(MacroStep):
@@ -262,12 +369,13 @@ class DelayStep(MacroStep):
     def edit(self, parent: tk.Tk):
         top = tk.Toplevel(parent)
         top.title("지연 단계")
-        top.geometry("300x120")
 
         tk.Label(top, text="초:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
         entry = tk.Entry(top, width=10)
         entry.insert(0, str(self.duration.get()))
         entry.grid(row=0, column=1, padx=5, pady=5)
+
+        result = {"ok": False}
 
         def ok():
             try:
@@ -279,12 +387,17 @@ class DelayStep(MacroStep):
                 messagebox.showerror("오류", "0.001 이상이어야 합니다")
                 return
             self.duration.set(val)
+            result["ok"] = True
+            top.destroy()
+
+        def cancel():
             top.destroy()
 
         tk.Button(top, text="확인", command=ok).grid(row=1, column=1, padx=5, pady=5)
-        tk.Button(top, text="취소", command=top.destroy).grid(row=1, column=2, padx=5, pady=5)
+        tk.Button(top, text="취소", command=cancel).grid(row=1, column=2, padx=5, pady=5)
         top.grab_set()
         parent.wait_window(top)
+        return result["ok"]
 
 
 class TextStep(MacroStep):
@@ -299,21 +412,27 @@ class TextStep(MacroStep):
     def edit(self, parent: tk.Tk):
         top = tk.Toplevel(parent)
         top.title("텍스트 단계")
-        top.geometry("400x150")
 
         tk.Label(top, text="텍스트:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
         entry = tk.Entry(top, width=40)
         entry.insert(0, self.text.get())
         entry.grid(row=0, column=1, padx=5, pady=5)
 
+        result = {"ok": False}
+
         def ok():
             self.text.set(entry.get())
+            result["ok"] = True
+            top.destroy()
+
+        def cancel():
             top.destroy()
 
         tk.Button(top, text="확인", command=ok).grid(row=1, column=1, padx=5, pady=5)
-        tk.Button(top, text="취소", command=top.destroy).grid(row=1, column=2, padx=5, pady=5)
+        tk.Button(top, text="취소", command=cancel).grid(row=1, column=2, padx=5, pady=5)
         top.grab_set()
         parent.wait_window(top)
+        return result["ok"]
 
 
 class RepeatStep(MacroStep):
@@ -327,12 +446,13 @@ class RepeatStep(MacroStep):
     def edit(self, parent: tk.Tk):
         top = tk.Toplevel(parent)
         top.title("반복 단계")
-        top.geometry("300x120")
 
         tk.Label(top, text="횟수:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
         entry = tk.Entry(top, width=5)
         entry.insert(0, str(self.count.get()))
         entry.grid(row=0, column=1, padx=5, pady=5)
+
+        result = {"ok": False}
 
         def ok():
             try:
@@ -341,12 +461,17 @@ class RepeatStep(MacroStep):
                 messagebox.showerror("오류", "잘못된 숫자")
                 return
             self.count.set(val)
+            result["ok"] = True
+            top.destroy()
+
+        def cancel():
             top.destroy()
 
         tk.Button(top, text="확인", command=ok).grid(row=1, column=1, padx=5, pady=5)
-        tk.Button(top, text="취소", command=top.destroy).grid(row=1, column=2, padx=5, pady=5)
+        tk.Button(top, text="취소", command=cancel).grid(row=1, column=2, padx=5, pady=5)
         top.grab_set()
         parent.wait_window(top)
+        return result["ok"]
 
 
 class MacroApp:
@@ -357,13 +482,13 @@ class MacroApp:
         left = tk.Frame(root)
         left.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=5)
 
-        tk.Button(left, text="이미지 추가", command=self.add_image).pack(fill=tk.X, pady=2)
-        tk.Button(left, text="마우스 추가", command=self.add_mouse).pack(fill=tk.X, pady=2)
-        tk.Button(left, text="키보드 추가", command=self.add_keyboard).pack(fill=tk.X, pady=2)
-        tk.Button(left, text="지연 추가", command=self.add_delay).pack(fill=tk.X, pady=2)
-        tk.Button(left, text="텍스트 추가", command=self.add_text).pack(fill=tk.X, pady=2)
-        tk.Button(left, text="반복 추가", command=self.add_repeat).pack(fill=tk.X, pady=2)
-        tk.Button(left, text="삭제", command=self.delete_selected).pack(fill=tk.X, pady=2)
+        tk.Button(left, text="이미지 추가", command=self.add_image).pack(fill=tk.X, pady=5)
+        tk.Button(left, text="마우스 추가", command=self.add_mouse).pack(fill=tk.X, pady=5)
+        tk.Button(left, text="키보드 추가", command=self.add_keyboard).pack(fill=tk.X, pady=5)
+        tk.Button(left, text="지연 추가", command=self.add_delay).pack(fill=tk.X, pady=5)
+        tk.Button(left, text="텍스트 추가", command=self.add_text).pack(fill=tk.X, pady=5)
+        tk.Button(left, text="반복 추가", command=self.add_repeat).pack(fill=tk.X, pady=5)
+        tk.Button(left, text="삭제", command=self.delete_selected).pack(fill=tk.X, pady=5)
 
         self.listbox = tk.Listbox(root)
         self.listbox.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -375,9 +500,9 @@ class MacroApp:
         self.drag_index = None
 
     def add_step(self, step: MacroStep):
-        step.edit(self.root)
-        self.steps.append(step)
-        self.listbox.insert(tk.END, step.summary())
+        if step.edit(self.root):
+            self.steps.append(step)
+            self.listbox.insert(tk.END, step.summary())
 
     def add_image(self):
         self.add_step(ImageStep())
@@ -411,9 +536,9 @@ class MacroApp:
             return
         i = idx[0]
         step = self.steps[i]
-        step.edit(self.root)
-        self.listbox.delete(i)
-        self.listbox.insert(i, step.summary())
+        if step.edit(self.root):
+            self.listbox.delete(i)
+            self.listbox.insert(i, step.summary())
 
     def start_drag(self, event):
         self.drag_index = self.listbox.nearest(event.y)
