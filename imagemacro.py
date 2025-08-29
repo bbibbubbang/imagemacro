@@ -59,10 +59,10 @@ class ImageStep(MacroStep):
         return f"{prefix}이미지: {self.path or '미설정'}"
 
     def build_editor(self, parent: tk.Widget):
-        tk.Label(parent, text="이미지 경로:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        tk.Label(parent, text="이미지 경로:").pack(anchor="w", padx=5, pady=5)
         self._path_entry = tk.Entry(parent, width=30)
         self._path_entry.insert(0, self.path)
-        self._path_entry.grid(row=0, column=1, padx=5, pady=5)
+        self._path_entry.pack(fill=tk.X, padx=5, pady=5)
 
         def browse():
             file = filedialog.askopenfilename(title="이미지 선택")
@@ -70,7 +70,9 @@ class ImageStep(MacroStep):
                 self._path_entry.delete(0, tk.END)
                 self._path_entry.insert(0, file)
 
-        tk.Button(parent, text="찾아보기", command=browse).grid(row=0, column=2, padx=5, pady=5)
+        btns = tk.Frame(parent)
+        btns.pack(fill=tk.X, padx=5, pady=5)
+        tk.Button(btns, text="찾아보기", command=browse).pack(side=tk.LEFT)
 
         def capture():
             if pyautogui is None:
@@ -123,32 +125,32 @@ class ImageStep(MacroStep):
             overlay.grab_set()
             parent.wait_window(overlay)
 
-        tk.Button(parent, text="캡쳐", command=capture).grid(row=0, column=3, padx=5, pady=5)
+        tk.Button(btns, text="캡쳐", command=capture).pack(side=tk.LEFT, padx=5)
 
-        tk.Label(parent, text="모드:").grid(row=1, column=0, sticky="w", padx=5, pady=5)
+        tk.Label(parent, text="모드:").pack(anchor="w", padx=5, pady=(10, 5))
         modes = [
             ("성공할 때까지", "until_success"),
             ("최대 시도 횟수", "max_attempts"),
             ("실패 시 분기", "fail_branch"),
         ]
-        for i, (label, value) in enumerate(modes):
-            tk.Radiobutton(parent, text=label, variable=self.mode, value=value).grid(
-                row=1, column=1 + i, sticky="w", padx=5, pady=5
+        for label, value in modes:
+            tk.Radiobutton(parent, text=label, variable=self.mode, value=value).pack(
+                anchor="w", padx=20
             )
 
-        tk.Label(parent, text="시도 횟수:").grid(row=2, column=0, sticky="w", padx=5, pady=5)
+        tk.Label(parent, text="시도 횟수:").pack(anchor="w", padx=5, pady=(10, 5))
         self._attempts_entry = tk.Entry(parent, width=5)
         self._attempts_entry.insert(0, str(self.max_attempts.get()))
-        self._attempts_entry.grid(row=2, column=1, sticky="w", padx=5, pady=5)
+        self._attempts_entry.pack(anchor="w", padx=5, pady=5)
 
-        tk.Label(parent, text="실패 시:").grid(row=3, column=0, sticky="w", padx=5, pady=5)
+        tk.Label(parent, text="실패 시:").pack(anchor="w", padx=5, pady=(10, 5))
         fail_opts = [
             ("중지", "stop"),
             ("분기", "branch"),
         ]
-        for i, (label, value) in enumerate(fail_opts):
-            tk.Radiobutton(parent, text=label, variable=self.fail_action, value=value).grid(
-                row=3, column=1 + i, sticky="w", padx=5, pady=5
+        for label, value in fail_opts:
+            tk.Radiobutton(parent, text=label, variable=self.fail_action, value=value).pack(
+                anchor="w", padx=20
             )
 
     def apply_editor(self) -> bool:
@@ -183,15 +185,16 @@ class MouseStep(MacroStep):
         )
 
     def build_editor(self, parent: tk.Widget):
-        tk.Label(parent, text="X:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
-        self._x_entry = tk.Entry(parent, width=6)
+        coord = tk.Frame(parent)
+        coord.pack(fill=tk.X, padx=5, pady=5)
+        tk.Label(coord, text="X:").pack(side=tk.LEFT)
+        self._x_entry = tk.Entry(coord, width=6)
         self._x_entry.insert(0, str(self.x.get()))
-        self._x_entry.grid(row=0, column=1, padx=5, pady=5)
-
-        tk.Label(parent, text="Y:").grid(row=0, column=2, sticky="w", padx=5, pady=5)
-        self._y_entry = tk.Entry(parent, width=6)
+        self._x_entry.pack(side=tk.LEFT, padx=(0, 10))
+        tk.Label(coord, text="Y:").pack(side=tk.LEFT)
+        self._y_entry = tk.Entry(coord, width=6)
         self._y_entry.insert(0, str(self.y.get()))
-        self._y_entry.grid(row=0, column=3, padx=5, pady=5)
+        self._y_entry.pack(side=tk.LEFT)
 
         def capture(event=None):
             if pyautogui:
@@ -205,24 +208,30 @@ class MouseStep(MacroStep):
 
         parent.bind("<F10>", capture)
 
-        tk.Label(parent, text="버튼:").grid(row=1, column=0, sticky="w", padx=5, pady=5)
+        btn_frame = tk.Frame(parent)
+        btn_frame.pack(fill=tk.X, padx=5, pady=(10, 5))
+        tk.Label(btn_frame, text="버튼:").pack(side=tk.LEFT)
         buttons = {"왼쪽": "left", "오른쪽": "right", "가운데": "middle"}
-        self._button_combo = ttk.Combobox(parent, values=list(buttons.keys()), state="readonly")
+        self._button_combo = ttk.Combobox(btn_frame, values=list(buttons.keys()), state="readonly")
         self._button_combo.set(next(k for k, v in buttons.items() if v == self.button.get()))
-        self._button_combo.grid(row=1, column=1, padx=5, pady=5)
+        self._button_combo.pack(side=tk.LEFT, padx=5)
 
-        tk.Label(parent, text="동작:").grid(row=1, column=2, sticky="w", padx=5, pady=5)
+        act_frame = tk.Frame(parent)
+        act_frame.pack(fill=tk.X, padx=5, pady=5)
+        tk.Label(act_frame, text="동작:").pack(side=tk.LEFT)
         actions = {"클릭": "click", "누르기": "press", "떼기": "release"}
-        self._action_combo = ttk.Combobox(parent, values=list(actions.keys()), state="readonly")
+        self._action_combo = ttk.Combobox(act_frame, values=list(actions.keys()), state="readonly")
         self._action_combo.set(next(k for k, v in actions.items() if v == self.action.get()))
-        self._action_combo.grid(row=1, column=3, padx=5, pady=5)
+        self._action_combo.pack(side=tk.LEFT, padx=5)
 
-        tk.Checkbutton(parent, text="더블", variable=self.double).grid(row=2, column=0, sticky="w", padx=5, pady=5)
+        tk.Checkbutton(parent, text="더블", variable=self.double).pack(anchor="w", padx=5, pady=5)
 
-        tk.Label(parent, text="간격(초):").grid(row=2, column=1, sticky="w", padx=5, pady=5)
-        self._interval_entry = tk.Entry(parent, width=6)
+        int_frame = tk.Frame(parent)
+        int_frame.pack(fill=tk.X, padx=5, pady=5)
+        tk.Label(int_frame, text="간격(초):").pack(side=tk.LEFT)
+        self._interval_entry = tk.Entry(int_frame, width=6)
         self._interval_entry.insert(0, str(self.interval.get()))
-        self._interval_entry.grid(row=2, column=2, padx=5, pady=5)
+        self._interval_entry.pack(side=tk.LEFT, padx=5)
 
     def apply_editor(self) -> bool:
         buttons = {"왼쪽": "left", "오른쪽": "right", "가운데": "middle"}
@@ -254,10 +263,12 @@ class KeyboardStep(MacroStep):
         return f"키보드 {act_names.get(self.action.get(), self.action.get())} {self.key.get()}"
 
     def build_editor(self, parent: tk.Widget):
-        tk.Label(parent, text="키:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
-        self._key_entry = tk.Entry(parent, width=10)
+        key_frame = tk.Frame(parent)
+        key_frame.pack(fill=tk.X, padx=5, pady=5)
+        tk.Label(key_frame, text="키:").pack(side=tk.LEFT)
+        self._key_entry = tk.Entry(key_frame, width=10)
         self._key_entry.insert(0, self.key.get())
-        self._key_entry.grid(row=0, column=1, padx=5, pady=5)
+        self._key_entry.pack(side=tk.LEFT, padx=5)
 
         capturing = tk.BooleanVar(value=False)
 
@@ -273,17 +284,17 @@ class KeyboardStep(MacroStep):
             capturing.set(True)
             parent.bind("<Key>", capture_key)
 
-        tk.Button(parent, text="입력", command=start_capture).grid(row=0, column=2, padx=5, pady=5)
+        tk.Button(key_frame, text="입력", command=start_capture).pack(side=tk.LEFT, padx=5)
 
-        tk.Label(parent, text="동작:").grid(row=1, column=0, sticky="w", padx=5, pady=5)
+        tk.Label(parent, text="동작:").pack(anchor="w", padx=5, pady=(10, 5))
         actions = [
             ("누르고 떼기", "press_release"),
             ("누르기", "press"),
             ("떼기", "release"),
         ]
-        for i, (label, value) in enumerate(actions):
-            tk.Radiobutton(parent, text=label, variable=self.action, value=value).grid(
-                row=1, column=1 + i, sticky="w", padx=5, pady=5
+        for label, value in actions:
+            tk.Radiobutton(parent, text=label, variable=self.action, value=value).pack(
+                anchor="w", padx=20
             )
 
     def apply_editor(self) -> bool:
@@ -300,10 +311,10 @@ class DelayStep(MacroStep):
         return f"지연 {self.duration.get():.3f}초"
 
     def build_editor(self, parent: tk.Widget):
-        tk.Label(parent, text="초:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        tk.Label(parent, text="초:").pack(anchor="w", padx=5, pady=5)
         self._entry = tk.Entry(parent, width=10)
         self._entry.insert(0, str(self.duration.get()))
-        self._entry.grid(row=0, column=1, padx=5, pady=5)
+        self._entry.pack(anchor="w", padx=5, pady=5)
 
     def apply_editor(self) -> bool:
         try:
@@ -328,10 +339,10 @@ class TextStep(MacroStep):
         return f"텍스트: {txt[:10]}" + ("..." if len(txt) > 10 else "")
 
     def build_editor(self, parent: tk.Widget):
-        tk.Label(parent, text="텍스트:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        tk.Label(parent, text="텍스트:").pack(anchor="w", padx=5, pady=5)
         self._entry = tk.Entry(parent, width=40)
         self._entry.insert(0, self.text.get())
-        self._entry.grid(row=0, column=1, padx=5, pady=5)
+        self._entry.pack(fill=tk.X, padx=5, pady=5)
 
     def apply_editor(self) -> bool:
         self.text.set(self._entry.get())
@@ -347,10 +358,10 @@ class RepeatStep(MacroStep):
         return f"반복 {self.count.get()}회"
 
     def build_editor(self, parent: tk.Widget):
-        tk.Label(parent, text="횟수:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        tk.Label(parent, text="횟수:").pack(anchor="w", padx=5, pady=5)
         self._entry = tk.Entry(parent, width=5)
         self._entry.insert(0, str(self.count.get()))
-        self._entry.grid(row=0, column=1, padx=5, pady=5)
+        self._entry.pack(anchor="w", padx=5, pady=5)
 
     def apply_editor(self) -> bool:
         try:
@@ -412,6 +423,10 @@ class MacroApp:
         if req_width > self.editor_width:
             self.editor_width = req_width
         self.editor.config(width=self.editor_width)
+        self.root.update_idletasks()
+        total_w = self.root.winfo_reqwidth()
+        total_h = self.root.winfo_reqheight()
+        self.root.geometry(f"{total_w}x{total_h}")
 
     def confirm_edit(self):
         if not self.editing_step or not self.editing_step.apply_editor():
