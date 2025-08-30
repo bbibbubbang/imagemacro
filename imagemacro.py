@@ -104,11 +104,11 @@ class ImageStep(MacroStep):
                     canvas.coords(rect["id"], start["x"], start["y"], event.x, event.y)
 
             def on_release(event):
-                overlay.destroy()
                 x1 = overlay.winfo_rootx() + start["x"]
                 y1 = overlay.winfo_rooty() + start["y"]
                 x2 = overlay.winfo_rootx() + event.x
                 y2 = overlay.winfo_rooty() + event.y
+                overlay.destroy()
                 region = (min(x1, x2), min(y1, y2), abs(x2 - x1), abs(y2 - y1))
                 img = pyautogui.screenshot(region=region)
                 fd, tmp = tempfile.mkstemp(suffix=".png")
